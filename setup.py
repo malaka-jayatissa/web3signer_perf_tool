@@ -17,7 +17,8 @@ setup(
         "pandas==2.2.3",
         "matplotlib==3.9.2",
         "httpx==0.27.2",
-        "typer==0.12.3"
+        "typer==0.12.3",
+        "psycopg2-binary==2.9.10"
     ],
     classifiers=[
         # See https://pypi.org/classifiers/ for a list of valid classifiers
