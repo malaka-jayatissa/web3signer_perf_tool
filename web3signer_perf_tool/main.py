@@ -36,7 +36,7 @@ def load_public_keys():
                 validator_details.append(result['public_key'])
     
     logger.info(f'loaded {len(validator_details)} keys')
-    return validator_details[100:200]
+    return validator_details
 
 @app.command()
 def latency(env:str):
