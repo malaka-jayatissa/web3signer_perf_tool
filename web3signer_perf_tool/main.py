@@ -58,7 +58,7 @@ def latency(env:str):
         response = api.send_attestation_signing(key,fork_info[1]['data'],attestation_data[1]['data'],genesis_data[1]['data']['genesis_validators_root'])
         end_time = time.perf_counter()
         result_obj = state.Result(response[0], response[1], end_time-start_time)
-        logger.info('respnse = {response} i = {i}')
+        logger.info(f'respnse = {response} i = {i}')
         state.STATE.add_result(i,result_obj)
         
     file.generate_results(parent_file_location,'latency',env, state.STATE)
