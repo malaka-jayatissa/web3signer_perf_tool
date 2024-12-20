@@ -1,5 +1,5 @@
 SAMPLE_SIZE = 1000
-BASE_URL = 'http://internal-k8s-nonsecur-ingressl-81a25d0149-1878778174.us-east-1.elb.amazonaws.com'
+BASE_URL = 'http://internal-k8s-validato-ingressl-c05959321c-379837465.us-east-1.elb.amazonaws.com'
 NETWORK = 'holesky'
 FEE_RECIPIENT_ADDRESS = '0xF269BD3C7Ddb4AE6fF7Ff97424f25f59B2ca7231'
 WITHDRAWAL_ADDRESS = '0xF269BD3C7Ddb4AE6fF7Ff97424f25f59B2ca7231'
