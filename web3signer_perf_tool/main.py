@@ -49,14 +49,17 @@ def latency(env:str):
     attestation_data = api.get_attestaion_data(1,slot_to_sign)
     genesis_data = api.get_genesis()
     validator_details = load_public_keys()
-    i = 0
-    for key in validator_details:
+    if(len(validator_details) < properties.SAMPLE_SIZE):
+        raise Exception('Not enough validators for test')
+  
+    for i in range(properties.SAMPLE_SIZE):
+        key = validator_details[i]
         start_time = time.perf_counter()
         response = api.send_attestation_signing(key,fork_info[1]['data'],attestation_data[1]['data'],genesis_data[1]['data']['genesis_validators_root'])
         end_time = time.perf_counter()
         result_obj = state.Result(response[0], response[1], end_time-start_time)
         state.STATE.add_result(i,result_obj)
-        i+=1
+        
     file.generate_results(parent_file_location,'latency',env, state.STATE)
 
 
