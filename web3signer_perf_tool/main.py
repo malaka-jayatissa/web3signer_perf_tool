@@ -137,12 +137,14 @@ def throughput_with_pool(msgs_per_min:int, env :str):
     pool.close()
     pool.join()
 
+    count = 0
     while not results_queue.empty():
         result = results_queue.get()
-        state.STATE.add_result(result)
+        state.STATE.add_result(count,result)
+        count +=1
 
     # Generate results
-    file.generate_results(parent_file_location, "throughput_optimized_pool", env, state.STATE, msgs_per_min)
+    file.generate_results(parent_file_location, "throughput", env, state.STATE, msgs_per_min)
     
 
 
