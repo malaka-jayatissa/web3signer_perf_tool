@@ -10,6 +10,7 @@ import psycopg2
 import file
 from psycopg2.extras import DictCursor
 import asyncio
+from multiprocessing import Pool, Manager, cpu_count
 
 app = typer.Typer()
 
@@ -71,9 +72,16 @@ async def send_attestation_async(key,fork_info, attestation_data, genesis_data, 
     end_time = time.perf_counter()
     logger.info(f'respnse = {response} index = {index} start_time = {start_time}')
     result_obj = state.Result(response[0], response[1], end_time-start_time)
-    state.STATE.add_result(index,result_obj)
+    return result_obj
 
-async def throughput_async(msgs_per_min:int, env :str):
+
+def async_worker(key, fork_info, attestation_data, genesis_data):
+    """Wrapper to run async function in multiprocessing."""
+    return asyncio.run(
+        send_attestation_async(key, fork_info, attestation_data, genesis_data)
+    )
+
+def throughput_with_pool(msgs_per_min:int, env :str):
     logger.info(f'Trhoughput Test Started base URL  = {properties.BASE_URL}')
     fork_info = api.get_fork_info()
     slot_data = api.get_current_slot()
@@ -84,18 +92,34 @@ async def throughput_async(msgs_per_min:int, env :str):
     validator_details = load_public_keys()
     sleep_time = 60/msgs_per_min
 
+    num_workers = min(cpu_count(), properties.SAMPLE_SIZE)
+    pool = Pool(processes=num_workers)
+    manager = Manager()
+    results = manager.list()
+
 
     if(len(validator_details) < properties.SAMPLE_SIZE):
         raise Exception('Not enough validators for test')
     
-    running_tasks = []
-    for i in range(properties.SAMPLE_SIZE):
-        key = validator_details[i]
-        task = asyncio.create_task(send_attestation_async(key, fork_info,attestation_data,genesis_data ,i))
-        await asyncio.sleep(sleep_time) 
+    # Define task function
+    def pool_task(key, index):
+        result = async_worker(key, fork_info, attestation_data, genesis_data)
+        results.append((index, result))
+    
+    tasks = []
+    for i, key in enumerate(validator_details[:properties.SAMPLE_SIZE]):
+        tasks.append(pool.apply_async(pool_task, args=(key, i)))
+        time.sleep(sleep_time)  # Throttle to maintain throughput
 
     
-    results = await asyncio.gather(*running_tasks)
+    pool.close()
+    pool.join()
+
+    # Collect results
+    for index, result in results:
+        if result:
+            state.STATE.add_result(index, result)
+            
     file.generate_results(parent_file_location,'throughput',env,state.STATE, msgs_per_min)
     
     
@@ -109,7 +133,7 @@ async def throughput_async(msgs_per_min:int, env :str):
 def throughput(msgs_per_min:int, env: str):
     """Test throughput."""
     logger.info('Throughput test started')
-    asyncio.run(throughput_async(msgs_per_min,env))
+    throughput_with_pool(msgs_per_min, env)
 
 
 if __name__ == '__main__':
