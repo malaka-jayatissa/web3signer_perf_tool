@@ -10,7 +10,7 @@ import psycopg2
 import file
 from psycopg2.extras import DictCursor
 import asyncio
-from multiprocessing import Pool, Manager, cpu_count
+from multiprocessing import Pool, Manager, cpu_count, current_process
 
 app = typer.Typer()
 
@@ -66,13 +66,12 @@ def latency(env:str):
     file.generate_results(parent_file_location,'latency',env, state.STATE)
 
 
-async def send_attestation_async(key,fork_info, attestation_data, genesis_data, index:int ):
-    logger.info('send_attestation_async  started ')
+async def send_attestation_async(key,fork_info, attestation_data, genesis_data, index:int, current_process ):
     start_time = time.perf_counter()
     response = await api.send_attestation_signing_async(key,fork_info[1]['data'],attestation_data[1]['data'],genesis_data[1]['data']['genesis_validators_root'])
     end_time = time.perf_counter()
-    logger.info(f'respnse = {response} index = {index} start_time = {start_time}')
-    result_obj = state.Result(response[0], response[1], end_time-start_time)
+    logger.info(f'respnse = {response} index = {index} start_time = {start_time} current_process = {current_process}')
+    result_obj = state.Result(response[0], response[1], end_time-start_time, start_time, current_process)
     return result_obj
 
 
@@ -86,12 +85,15 @@ def async_worker(key, fork_info, attestation_data, genesis_data, results_queue):
 async def process_batch(keys, fork_info, attestation_data, genesis_data, results_queue,sleep_time):
     """Process a batch of keys asynchronously."""
     tasks = []
-  
+    logger.info('process_batch 1')
+    try:
+        current_process_val = current_process().name
+    except Exception as e:
+        logger.error(e)
     count = 0
     for key in keys:
-        logger.info(f'Process Batch started keys = {key} count = {count}')
         count +=1
-        task = asyncio.create_task(send_attestation_async(key, fork_info, attestation_data, genesis_data,count))
+        task = asyncio.create_task(send_attestation_async(key, fork_info, attestation_data, genesis_data,count, current_process_val))
         tasks.append(task)
         await asyncio.sleep(sleep_time)
    
@@ -103,7 +105,6 @@ async def process_batch(keys, fork_info, attestation_data, genesis_data, results
 
 def worker_process(keys, fork_info, attestation_data, genesis_data, results_queue, sleep_time):
     """Worker process to handle a batch of keys using asyncio."""
-    logger.info('Worker Process started ')
     asyncio.run(
         process_batch(keys, fork_info, attestation_data, genesis_data, results_queue, sleep_time)
     )
@@ -126,16 +127,25 @@ def throughput_with_pool(msgs_per_min:int, env :str):
     pool = Pool(processes=num_workers)
     manager = Manager()
     results_queue = manager.Queue()
+    sleep_time = sleep_time * num_workers
 
-    batches = [
-        validator_details[i:i + batch_size]
-        for i in range(0, properties.SAMPLE_SIZE, batch_size)
-    ]
+    remaining_count = properties.SAMPLE_SIZE
+    batches = []
+    for i in range(0, properties.SAMPLE_SIZE, batch_size):
+        if remaining_count > batch_size:
+            batches.append(validator_details[i:i + batch_size])
+        else: 
+             batches.append(validator_details[i:i + remaining_count])
+        remaining_count -= batch_size
+        
+    
+    logger.info(f'batches = {len(batches)}')
+
 
     if(len(validator_details) < properties.SAMPLE_SIZE):
         raise Exception('Not enough validators for test')
     
-     # Submit tasks to the pool
+    # Submit tasks to the pool
     for batch in batches:
         pool.apply_async(worker_process, args=(batch, fork_info, attestation_data, genesis_data, results_queue, sleep_time))
 
