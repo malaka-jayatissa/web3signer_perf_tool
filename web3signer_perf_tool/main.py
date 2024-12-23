@@ -69,7 +69,7 @@ async def send_attestation_async(key,fork_info, attestation_data, genesis_data, 
     start_time = time.perf_counter()
     response = await api.send_attestation_signing_async(key,fork_info[1]['data'],attestation_data[1]['data'],genesis_data[1]['data']['genesis_validators_root'])
     end_time = time.perf_counter()
-    logger.info(f'respnse = {response} index = {index}')
+    logger.info(f'respnse = {response} index = {index} start_time = {start_time}')
     result_obj = state.Result(response[0], response[1], end_time-start_time)
     state.STATE.add_result(index,result_obj)
 
