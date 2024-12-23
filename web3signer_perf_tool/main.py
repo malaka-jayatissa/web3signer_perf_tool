@@ -75,11 +75,33 @@ async def send_attestation_async(key,fork_info, attestation_data, genesis_data, 
     return result_obj
 
 
-def async_worker(key, fork_info, attestation_data, genesis_data):
+def async_worker(key, fork_info, attestation_data, genesis_data, results_queue):
     """Wrapper to run async function in multiprocessing."""
     return asyncio.run(
-        send_attestation_async(key, fork_info, attestation_data, genesis_data)
+        send_attestation_async(key, fork_info, attestation_data, genesis_data, results_queue)
     )
+
+
+async def process_batch(keys, fork_info, attestation_data, genesis_data, results_queue,sleep_time):
+    """Process a batch of keys asynchronously."""
+    tasks = []
+        
+    for key in keys:
+       task = asyncio.create_task(send_attestation_async(key, fork_info, attestation_data, genesis_data))
+       tasks.append(task)
+       await asyncio.sleep(sleep_time)
+       
+    results = await asyncio.gather(*tasks)
+    for result in results:
+        if result:
+            results_queue.put(result)
+
+def worker_process(keys, fork_info, attestation_data, genesis_data, results_queue, sleep_time):
+    """Worker process to handle a batch of keys using asyncio."""
+    asyncio.run(
+        process_batch(keys, fork_info, attestation_data, genesis_data, results_queue, sleep_time)
+    )
+
 
 def throughput_with_pool(msgs_per_min:int, env :str):
     logger.info(f'Trhoughput Test Started base URL  = {properties.BASE_URL}')
@@ -93,35 +115,34 @@ def throughput_with_pool(msgs_per_min:int, env :str):
     sleep_time = 60/msgs_per_min
 
     num_workers = min(cpu_count(), properties.SAMPLE_SIZE)
+    batch_size = max(1, len(validator_details) // num_workers)
+    logger.info(f'number of workers = {num_workers} batch size = {batch_size}')
     pool = Pool(processes=num_workers)
     manager = Manager()
-    results = manager.list()
+    results_queue = manager.Queue()
 
+    batches = [
+        validator_details[i:i + batch_size]
+        for i in range(0, len(validator_details), batch_size)
+    ]
 
     if(len(validator_details) < properties.SAMPLE_SIZE):
         raise Exception('Not enough validators for test')
     
-    # Define task function
-    def pool_task(key, index):
-        result = async_worker(key, fork_info, attestation_data, genesis_data)
-        results.append((index, result))
-    
-    tasks = []
-    for i, key in enumerate(validator_details[:properties.SAMPLE_SIZE]):
-        tasks.append(pool.apply_async(pool_task, args=(key, i)))
-        time.sleep(sleep_time)  # Throttle to maintain throughput
+     # Submit tasks to the pool
+    for batch in batches:
+        pool.apply_async(worker_process, args=(batch, fork_info, attestation_data, genesis_data, results_queue, sleep_time))
 
     
     pool.close()
     pool.join()
 
-    # Collect results
-    for index, result in results:
-        if result:
-            state.STATE.add_result(index, result)
-            
-    file.generate_results(parent_file_location,'throughput',env,state.STATE, msgs_per_min)
-    
+    while not results_queue.empty():
+        result = results_queue.get()
+        state.STATE.add_result(result)
+
+    # Generate results
+    file.generate_results(parent_file_location, "throughput_optimized_pool", env, state.STATE, msgs_per_min)
     
 
 
