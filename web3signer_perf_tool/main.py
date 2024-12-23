@@ -121,7 +121,7 @@ def throughput_with_pool(msgs_per_min:int, env :str):
     sleep_time = 60/msgs_per_min
 
     num_workers = min(cpu_count(), properties.SAMPLE_SIZE)
-    batch_size = max(1, len(validator_details) // num_workers)
+    batch_size = max(1, len(properties.SAMPLE_SIZE) // num_workers)
     logger.info(f'number of workers = {num_workers} batch size = {batch_size}')
     pool = Pool(processes=num_workers)
     manager = Manager()
