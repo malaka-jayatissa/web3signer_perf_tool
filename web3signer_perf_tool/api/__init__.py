@@ -1,2 +1,2 @@
 from .beacon_node_service import get_fork_info, get_attestaion_data,get_current_slot, get_genesis
-from .api_service import send_attestation_signing
+from .api_service import send_attestation_signing,send_attestation_signing_async

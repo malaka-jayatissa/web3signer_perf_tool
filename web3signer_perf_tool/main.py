@@ -9,6 +9,7 @@ import state
 import psycopg2
 import file
 from psycopg2.extras import DictCursor
+import asyncio
 
 app = typer.Typer()
 
@@ -64,11 +65,51 @@ def latency(env:str):
     file.generate_results(parent_file_location,'latency',env, state.STATE)
 
 
+async def send_attestation_async(key,fork_info, attestation_data, genesis_data, index:int ):
+    start_time = time.perf_counter()
+    response = await api.send_attestation_signing_async(key,fork_info[1]['data'],attestation_data[1]['data'],genesis_data[1]['data']['genesis_validators_root'])
+    end_time = time.perf_counter()
+    logger.info(f'respnse = {response} index = {index}')
+    result_obj = state.Result(response[0], response[1], end_time-start_time)
+    state.STATE.add_result(index,result_obj)
+
+async def throughput_async(msgs_per_min:int, env :str):
+    logger.info(f'Trhoughput Test Started base URL  = {properties.BASE_URL}')
+    fork_info = api.get_fork_info()
+    slot_data = api.get_current_slot()
+    slot_to_sign = slot_data[1]['data'][0]['header']['message']['slot']
+    logger.info(f'Slot to sign = {slot_to_sign}')
+    attestation_data = api.get_attestaion_data(1,slot_to_sign)
+    genesis_data = api.get_genesis()
+    validator_details = load_public_keys()
+    sleep_time = 60/msgs_per_min
+
+
+    if(len(validator_details) < properties.SAMPLE_SIZE):
+        raise Exception('Not enough validators for test')
+    
+    running_tasks = []
+    for i in range(properties.SAMPLE_SIZE):
+        key = validator_details[i]
+        task = asyncio.create_task(send_attestation_async(key, fork_info,attestation_data,genesis_data ,i))
+        await asyncio.sleep(sleep_time) 
+
+    
+    results = await asyncio.gather(*running_tasks)
+    file.generate_results(parent_file_location,'throughput',env,state.STATE, msgs_per_min)
+    
+    
+
+
+
+
+
 
 @app.command()
-def throughput():
+def throughput(msgs_per_min:int, env: str):
     """Test throughput."""
-    print("Throughput test started!")
+    logger.info('Throughput test started')
+    asyncio.run(throughput_async(msgs_per_min,env))
 
 
 if __name__ == '__main__':
