@@ -129,7 +129,7 @@ def throughput_with_pool(msgs_per_min:int, env :str):
 
     batches = [
         validator_details[i:i + batch_size]
-        for i in range(0, len(validator_details), batch_size)
+        for i in range(0, properties.SAMPLE_SIZE, batch_size)
     ]
 
     if(len(validator_details) < properties.SAMPLE_SIZE):
