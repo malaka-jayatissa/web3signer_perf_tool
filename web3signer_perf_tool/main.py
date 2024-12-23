@@ -67,6 +67,7 @@ def latency(env:str):
 
 
 async def send_attestation_async(key,fork_info, attestation_data, genesis_data, index:int ):
+    logger.info('send_attestation_async  started ')
     start_time = time.perf_counter()
     response = await api.send_attestation_signing_async(key,fork_info[1]['data'],attestation_data[1]['data'],genesis_data[1]['data']['genesis_validators_root'])
     end_time = time.perf_counter()
@@ -85,11 +86,15 @@ def async_worker(key, fork_info, attestation_data, genesis_data, results_queue):
 async def process_batch(keys, fork_info, attestation_data, genesis_data, results_queue,sleep_time):
     """Process a batch of keys asynchronously."""
     tasks = []
-        
+  
+    count = 0
     for key in keys:
-       task = asyncio.create_task(send_attestation_async(key, fork_info, attestation_data, genesis_data))
-       tasks.append(task)
-       await asyncio.sleep(sleep_time)
+        logger.info(f'Process Batch started keys = {key} count = {count}')
+        count +=1
+        task = asyncio.create_task(send_attestation_async(key, fork_info, attestation_data, genesis_data,count))
+        tasks.append(task)
+        await asyncio.sleep(sleep_time)
+   
        
     results = await asyncio.gather(*tasks)
     for result in results:
@@ -98,6 +103,7 @@ async def process_batch(keys, fork_info, attestation_data, genesis_data, results
 
 def worker_process(keys, fork_info, attestation_data, genesis_data, results_queue, sleep_time):
     """Worker process to handle a batch of keys using asyncio."""
+    logger.info('Worker Process started ')
     asyncio.run(
         process_batch(keys, fork_info, attestation_data, genesis_data, results_queue, sleep_time)
     )
@@ -139,6 +145,7 @@ def throughput_with_pool(msgs_per_min:int, env :str):
 
     while not results_queue.empty():
         result = results_queue.get()
+        logger.info(f'result = {result}')
         state.STATE.add_result(result)
 
     # Generate results
